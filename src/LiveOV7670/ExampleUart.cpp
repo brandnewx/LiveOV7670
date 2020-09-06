@@ -12,6 +12,7 @@
 
 static const uint8_t COMMAND_NEW_FRAME = 0x01;
 static const uint8_t COMMAND_END_OF_LINE = 0x02;
+static const uint8_t COMMAND_DEBUG_DATA = 0x03;
 
 static const uint16_t COLOR_GREEN = 0x07E0;
 static const uint16_t COLOR_RED = 0xF800;
@@ -102,7 +103,7 @@ inline void sendPixelByteL(uint8_t byte) __attribute__((always_inline));
 inline void sendPixelByteGrayscale(uint8_t byte) __attribute__((always_inline));
 inline void pixelSendingDelay() __attribute__((always_inline));
 
-
+inline void debugPrint(const String debugText) __attribute__((always_inline));
 
 
 // this is called in Arduino setup() function
@@ -121,8 +122,6 @@ void initializeScreenAndCamera() {
     sendBlankFrame(COLOR_RED);
     delay(3000);
   }
-
-  TIMSK0 = 0; // disable "millis" timer interrupt
 }
 
 
@@ -150,12 +149,14 @@ void sendBlankFrame(uint16_t color) {
 
 uint8_t lineBuffer [lineLength*2 + 1 + 5];
 uint16_t lineBufferIndex = 0;
+uint16_t frameCounter = 0;
 
 
 // this is called in Arduino loop() function
 void processFrame() {
   startNewFrame(uartPixelFormat);
 
+  noInterrupts();
   camera.waitForVsync();
 
   for (uint16_t y = 0; y < lineCount; y++) {
@@ -206,6 +207,11 @@ void processFrame() {
 
     endOfLine();
   }
+  interrupts();
+
+  frameCounter++;
+  debugPrint("Frame " + String(frameCounter));
+  //debugPrint("Frame " + String(frameCounter, 16)); // send number in hexadecimal
 }
 
 
@@ -242,7 +248,6 @@ void endOfLine()   {
   pixelSendingDelay();
 }
 
-
 void sendNextPixelByte() {
   if (uartPixelFormat == UART_PIXEL_FORMAT_GRAYSCALE) {
     sendPixelByteGrayscale(lineBuffer[lineBufferIndex]);
@@ -276,6 +281,20 @@ void sendPixelByteGrayscale(uint8_t byte) {
 }
 
 
+
+
+void debugPrint(const String debugText) {
+    UDR0 = 0x00;
+    pixelSendingDelay();
+    UDR0 = COMMAND_DEBUG_DATA;
+    pixelSendingDelay();
+    UDR0 = debugText.length();
+    pixelSendingDelay();
+    for (uint16_t i=0; i<debugText.length(); i++) {
+        UDR0 = debugText[i];
+        pixelSendingDelay();
+    }
+}
 
 
 
